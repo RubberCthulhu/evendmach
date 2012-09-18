@@ -1,7 +1,7 @@
 
 -module(padding).
 
--export([len/1, len/2, pad/1, pad/2, pad/4, unpad/1]).
+-export([len/1, len/2, pad/1, pad/2, unpad/1, unpad/2]).
 
 % 64 bits
 -define(BLOCK_64, 8).
@@ -28,8 +28,21 @@ pad(Data, BlockSize, Gen, GenArgs) when is_binary(Data) ->
     Padding = apply(Gen, [N | GenArgs]),
     <<Data/bytes, Padding/bytes>>.
 
-unpad(Data) when is_binary(Data) ->
-    binary:part(Data, 0, byte_size(Data)-binary:last(Data)).
+unpad(Data) ->
+    unpad(Data, ?BLOCK_64).
+
+unpad(Data, BlockSize) when is_binary(Data) ->
+    Len = byte_size(Data),
+    Last = binary:last(Data),
+    case Len rem BlockSize of
+	0 -> ok;
+	_ -> throw(incorrect_size)
+    end,
+    case (Last > Len) or (Last > BlockSize) of
+	true -> throw(incorrect_padding);
+	_ -> ok
+    end,
+    binary:part(Data, 0, Len-Last).
 
 gen(N) ->
     gen(N, N).
