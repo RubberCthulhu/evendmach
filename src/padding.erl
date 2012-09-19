@@ -34,15 +34,16 @@ unpad(Data) ->
 unpad(Data, BlockSize) when is_binary(Data) ->
     Len = byte_size(Data),
     Last = binary:last(Data),
-    case Len rem BlockSize of
-	0 -> ok;
-	_ -> throw(incorrect_size)
-    end,
-    case (Last > Len) or (Last > BlockSize) of
-	true -> throw(incorrect_padding);
-	_ -> ok
-    end,
-    binary:part(Data, 0, Len-Last).
+    if
+	(Len rem BlockSize) == 0, Last =< Len, Last =< BlockSize ->
+	    ActualLen = Len - Last,
+	    Padding = binary:copy(<<Last>>, Last),
+	    case Data of
+		<<Actual:ActualLen/bytes, Padding/bytes>> -> Actual;
+		_ -> throw(incorrect_padding)
+	    end;
+	true -> throw(incorrect_data)
+    end.
 
 gen(N) ->
     gen(N, N).
