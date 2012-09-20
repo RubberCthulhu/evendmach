@@ -16,6 +16,9 @@
 
 -record(state, {sock, conn_state}).
 
+-define(KEY, <<16#01, 16#ae, 16#32, 16#ff, 16#d9, 16#13, 16#41, 16#fb>>).
+-define(IVEC, <<16#ab, 16#00, 16#33, 16#49, 16#91, 16#88, 16#ab, 16#cd>>).
+
 start() ->
     application:start(vm_client).
 
@@ -56,9 +59,12 @@ handle_call(_Msg, _From, State) ->
 handle_cast(stop, State) ->
     {stop, normal, State}.
 
-handle_info({tcp, _Sock, _RawData}, State) ->
+handle_info({tcp, _Sock, RawData}, State) ->
+    Len = byte_size(RawData),
+    error_logger:info_msg("Data received: ~w: ~p~n", [Len, RawData]),
     {noreply, State};
 handle_info({tcp_closed, _Sock}, State) ->
+    error_logger:info_msg("Connection closed~n"),
     {noreply, State}.
 
 terminate(_Reason, #state{sock = Sock, conn_state = ConnState} = _State) ->
@@ -93,7 +99,8 @@ disconnect(ConnRef) ->
 send(ConnRef, Msg) when is_list(Msg) ->
     send(ConnRef, binary:list_to_bin(Msg));
 send(ConnRef, Msg) when is_binary(Msg) ->
-    call(ConnRef, {send, Msg}).
+    Data = vm_msg:encode(?KEY, ?IVEC, Msg),
+    call(ConnRef, {send, Data}).
 
 call(Pid, Msg) ->
     gen_server:call(Pid, Msg, infinity).
