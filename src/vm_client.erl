@@ -61,7 +61,8 @@ handle_cast(stop, State) ->
 
 handle_info({tcp, _Sock, RawData}, State) ->
     Len = byte_size(RawData),
-    error_logger:info_msg("Data received: ~w: ~p~n", [Len, RawData]),
+    Hex = bin_to_hex:bin_to_hex(RawData),
+    error_logger:info_msg("Data received: ~w: ~s~n", [Len, Hex]),
     {noreply, State};
 handle_info({tcp_closed, _Sock}, State) ->
     error_logger:info_msg("Connection closed~n"),

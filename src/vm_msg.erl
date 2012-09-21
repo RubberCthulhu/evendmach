@@ -9,6 +9,12 @@ encode(Key, IVec, Msg) ->
     Len = byte_size(DesData),
     <<Len:32, DesData/bytes>>.
 
+%decode_len(<<Len:32, Payload/bytes>>) ->
+%    {ok, Len};
+%decode_len(_) ->
+%    {error, size_lack}.
+
+
 
 
 
