@@ -16,7 +16,7 @@ start_child() ->
     supervisor:start_child(vm_server_sup, []).
 
 init([ListenSock]) ->
-    RestartStrategy = {sumple_one_for_one, 0, 1},
+    RestartStrategy = {simple_one_for_one, 0, 1},
     Child = {vm_server, {vm_server, start_link, [ListenSock]}, temporary,
 	     brutal_kill, worker, [vm_server]},
     {ok, {RestartStrategy, [Child]}}.

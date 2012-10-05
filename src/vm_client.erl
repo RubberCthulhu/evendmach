@@ -64,20 +64,20 @@ handle_cast(stop, State) ->
 handle_info({tcp, _Sock, RawData}, #state{buffer = Buffer} = State) ->
     Len = byte_size(RawData),
     Hex = bin_to_hex:bin_to_hex(RawData),
-    error_logger:info_msg("Data received: ~w: ~s~n", [Len, Hex]),
+    error_logger:info_msg("vm_client: Data received: ~w: ~s~n", [Len, Hex]),
     case process(<<Buffer/bytes, RawData/bytes>>, fun on_msg_received/2, []) of
 	{ok, Rest, _} ->
 	    ok;
 	{error, Reason, Rest, _} ->
-	    error_logger:error_msg("Process data error: ~p~n", Reason)
+	    error_logger:error_msg("vm_client: Process data error: ~p~n", Reason)
     end,
     {noreply, State#state{buffer = Rest}};
 handle_info({tcp_closed, _Sock}, State) ->
-    error_logger:info_msg("Connection closed~n"),
+    error_logger:info_msg("vm_client: Connection closed~n"),
     {noreply, State}.
 
 on_msg_received(Msg, _) ->
-    error_logger:info_msg("Message received: ~p~n", [Msg]),
+    error_logger:info_msg("vm_client: Message received: ~p~n", [Msg]),
     [].
 
 terminate(_Reason, #state{sock = Sock, conn_state = ConnState} = _State) ->
