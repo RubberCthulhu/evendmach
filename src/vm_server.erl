@@ -57,9 +57,10 @@ handle_info(timeout, #state{sock = ListenSock} = State) ->
     vm_server_sup:start_child(),
     {noreply, State#state{sock = Sock, conn_state = handle}}.
 
-on_msg_received(Msg, _) ->
+on_msg_received(Msg, UserData) ->
     error_logger:info_msg("vm_server: Message received: ~p~n", [Msg]),
-    [].
+    process_request(Msg, UserData).
+    %{ok, []}.
 
 terminate(_Reason, _State) ->
     ok.
@@ -70,15 +71,33 @@ code_change(_OldVsn, State, _Extra) ->
 process(<<>>, _, UserData) ->
     {ok, <<>>, UserData};
 process(Data, Callback, UserData) ->
-    case vm_msg:decode(?KEY, ?IVEC, Data) of
+    %case vm_msg:decode(?KEY, ?IVEC, Data) of
+    case vm_msg:decode_req(?KEY, ?IVEC, Data) of
 	{ok, Msg, Rest} ->
-	    NewUserData = Callback(Msg, UserData),
-	    process(Rest, Callback, NewUserData);
+	    %NewUserData = Callback(Msg, UserData),
+	    case Callback(Msg, UserData) of
+		{ok, NewUserData} ->
+		    process(Rest, Callback, NewUserData);
+		{error, Reason, NewUserData} ->
+		    {error, Reason, Data, NewUserData}
+	    end;
 	{error, data_lack} ->
 	    {ok, Data, UserData};
 	{error, Reason} ->
 	    {error, Reason, Data, UserData}
     end.
+
+process_request({error, Reason}, UserData) ->
+    error_logger:error_msg("vm_server: Request error: ~p: close connection", [Reason]),
+    {error, Reason, UserData};
+process_request({error, Reason, _Cmd, _}, _UserData) ->
+    error_logger:error_msg("vm_server: Request error: ~p: send error responce", [Reason]),
+    send_reply().
+
+send_reply() ->
+    ok.
+
+
 
 
 

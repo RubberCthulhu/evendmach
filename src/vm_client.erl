@@ -12,9 +12,12 @@
 	 handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3]).
 
--export([connect/2, disconnect/1, send/2, buffer/1]).
+-export([connect/0, connect/2, disconnect/1, send/2, buffer/1]).
 
 -record(state, {sock, conn_state, buffer}).
+
+-define(DEFAULT_HOST, "127.0.0.1").
+-define(DEFAULT_PORT, 5555).
 
 -define(KEY, <<16#01, 16#ae, 16#32, 16#ff, 16#d9, 16#13, 16#41, 16#fb>>).
 -define(IVEC, <<16#ab, 16#00, 16#33, 16#49, 16#91, 16#88, 16#ab, 16#cd>>).
@@ -104,6 +107,10 @@ process(Data, Callback, UserData) ->
 	{error, Reason} ->
 	    {error, Reason, Data, UserData}
     end.
+
+% With default host and port for debug.
+connect() ->
+    connect(?DEFAULT_HOST, ?DEFAULT_PORT).
 
 connect(Host, Port) ->
     {ok, Pid} = vm_client_sup:start_child(),
