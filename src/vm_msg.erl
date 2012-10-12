@@ -1,7 +1,7 @@
 
 -module(vm_msg).
 
--export([encode/3, decode/3, decode_req/3]).
+-export([encode/3, decode/3, decode_req/3, parse/1]).
 
 -define(MAX_SIZE, 1024).
 
@@ -14,6 +14,9 @@
 
 -define(CLIENT_ID_MAX_SIZE, 50).
 -define(CARD_NUMBER_MAX_SIZE, 40).
+-define(PRODUCT_CODE_MAX_SIZE, 19).
+
+-record(vmReq, {cmd, clientId, cardNumber, cardType, tId, product, money}).
 
 encode(Key, IVec, Msg) ->
     Data = padding:pad(Msg),
@@ -40,67 +43,115 @@ decode(_, _, _) ->
 decode_req(Key, IVec, Data) ->
     case decode(Key, IVec, Data) of
 	{ok, RawMsg, Rest} ->
-	    ParseInfo = parse_req(RawMsg),
+	    ParseInfo = parse(RawMsg),
 	    {ok, ParseInfo, Rest};
 	{error, Reason} ->
 	    {error, Reason}
     end.
 
-parse_req(Data) when is_binary(Data) ->
-    parse_req(binary:bin_to_list(Data));
-parse_req(Data) when is_list(Data) ->
-    case lists:map(fun string:strip/1, string:tokens(Data, ";")) of
-	[Cmd | Args] ->
-	    parse_req(Cmd, Args);
+parse(Data) when is_binary(Data) ->
+    parse(binary:bin_to_list(Data));
+parse(Data) when is_list(Data) ->
+    List = lists:map(fun string:strip/1, string:tokens(Data, ";")),
+    parse_msg(List).
+
+parse_msg([]) ->
+    {error, command_unspecified};
+parse_msg([First | Rest]) ->
+    case string:to_integer(First) of
+	{Cmd, []} ->
+	    parse_cmd(Cmd, Rest);
 	_ ->
-	    {error, command_unspecified}
+	    {error, invalid_format, First, Rest}
     end.
 
-%check_cmd([Cmd | Rest]) ->
-%    case string:to_integer(Cmd) of
-%	{Code, []} when check_cmd_code(Code) ->
-%	    check_client(Code, Rest);
-%	{Code, []} ->
-%	    {unknown, Code, Rest};
-%	_ ->
-%	    {error, invalid_format}
-%    end.
+parse_cmd(Cmd, Args) when Cmd == ?CMD_START ->
+    parse_cmd(Cmd, [fun client_id/1, fun card_number/1, fun int/1], Args, 
+	fun ([C, N, T]) ->
+		#vmReq{cmd = Cmd, clientId = C, cardNumber = N, cardType = T}
+	end);
+parse_cmd(Cmd, Args) when Cmd == ?CMD_BUY ->
+    parse_cmd(Cmd, [fun client_id/1, fun int/1, fun product/1, fun int/1], Args, 
+	fun ([C, T, P, M]) ->
+		#vmReq{cmd = Cmd, clientId = C, tId = T, product = P, money = M}
+	end);
+parse_cmd(Cmd, Args) when Cmd == ?CMD_ACCEPT ->
+    parse_cmd(Cmd, [fun client_id/1, fun int/1], Args, 
+	fun ([C, T]) ->
+		#vmReq{cmd = Cmd, clientId = C, tId = T}
+	end);
+parse_cmd(Cmd, Args) when Cmd == ?CMD_CANCEL ->
+    parse_cmd(Cmd, [fun client_id/1, fun int/1], Args, 
+	fun ([C, T]) ->
+		#vmReq{cmd = Cmd, clientId = C, tId = T}
+	end);
+parse_cmd(Cmd, Args) when Cmd == ?CMD_BALANCE ->
+    parse_cmd(Cmd, [fun client_id/1, fun card_number/1, fun int/1], Args, 
+	fun ([C, N, T]) ->
+		#vmReq{cmd = Cmd, clientId = C, cardNumber = N, cardType = T}
+	end);
+parse_cmd(Cmd, Args) when Cmd == ?CMD_PUT ->
+    parse_cmd(Cmd, [fun client_id/1, fun int/1, fun int/1], Args, 
+	fun ([C, N, T]) ->
+		#vmReq{cmd = Cmd, clientId = C, cardNumber = N, cardType = T}
+	end);
+parse_cmd(Cmd, Args) ->
+    {error, unknown_command, Cmd, Args}.
 
-parse_req(Cmd, Args) when is_list(Cmd) ->
-    case string:to_integer(Cmd) of
-	{CmdCode, []} ->
-	    parse_req(CmdCode, Args);
-	_ ->
+parse_cmd(Cmd, Parsers, Args, Prod) ->
+    case parse_args(Parsers, Args) of
+	{ok, Values, _} ->
+	    Prod(Values);
+	{error, Reason} ->
+	    {error, Reason, Cmd, Args}
+    end.
+
+parse_args(Parsers, Args) ->
+    parse_args(Parsers, Args, []).
+
+parse_args([], Rest, Acc) ->
+    {ok, lists:reverse(Acc), Rest};
+parse_args(_, [], _) ->
+    {error, parameters_absent};
+parse_args([Parser | Parsers], [Arg | Rest], Acc) ->
+    case Parser(Arg) of
+	{ok, Value} ->
+	    parse_args(Parsers, Rest, [Value | Acc]);
+	error ->
 	    {error, invalid_format}
-    end;
-%parse_req(?CMD_BALANCE, [Client, CardNumber, CardType]) ->
-%    {balance, Client, CardNumber, CardType};
-parse_req(Cmd, Args) ->
-    {unknown, Cmd, Args}.
-
-parse_client(Client) when length(Client) =< ?CLIENT_ID_MAX_SIZE ->
-    {ok, Client};
-parse_client(_) ->
-    {error}.
-
-parse_int(S) ->
-    case string:to_integer(S) of
-	{N, []} ->
-	    {ok, N};
-	_ ->
-	    {error}
     end.
 
-is_hex_digit(C) ->
-    (C => $0 and C =< 9) or (C => $a and C =< $f) or (C => $A and C =< $F).
+client_id(Client) when length(Client) =< ?CLIENT_ID_MAX_SIZE ->
+    {ok, Client};
+client_id(_) ->
+    error.
 
-parse_card_number(Number) when length(Number) =< ?CARD_NUMBER_MAX_SIZE ->
-    case lists:all(fun is_hex_digit/1, Number) of
+card_number(Number) when length(Number) =< ?CARD_NUMBER_MAX_SIZE ->
+    Number1 = string:to_upper(Number),
+    case lists:all(fun (C) -> 
+			   ((C >= $0) and (C =< $9)) or ((C >= $A) and (C =< $F)) end, 
+		   Number1) of
 	true ->
-	    {ok, Number};
+	    {ok, Number1};
 	false ->
-	    {error}
+	    error
     end;
-parse_card_number(_) ->
-    {error}.
+card_number(_) ->
+    error.
+
+product(Product) when length(Product) =< ?PRODUCT_CODE_MAX_SIZE ->
+    {ok, Product};
+product(_) ->
+    error.
+
+int(S) ->
+    case string:to_integer(S) of
+	{X, []} ->
+	    {ok, X};
+	_ ->
+	    error
+    end.
+
+
+
 
