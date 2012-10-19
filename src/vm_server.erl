@@ -3,10 +3,10 @@
 
 -behaviour(gen_server).
 
-% API
+%% API
 -export([start/0, start/1, stop/0, start_link/1]).
 
-% Callbacks.
+%% Callback
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
 	terminate/2, code_change/3]).
 
@@ -39,26 +39,26 @@ handle_cast(stop, State) ->
 handle_info({tcp, _Sock, RawData}, #state{buffer = Buffer} = State) ->
     Len = byte_size(RawData),
     Hex = bin_to_hex:bin_to_hex(RawData),
-    error_logger:info_msg("vm_server: Data received: ~w: ~s~n", [Len, Hex]),
+    vm_logger:debug("vm_server: Data received: ~w: ~s", [Len, Hex]),
     case process(<<Buffer/bytes, RawData/bytes>>, fun on_msg_received/2, []) of
 	{ok, Rest, _} ->
 	    {noreply, State#state{buffer = Rest}};
 	{error, Reason, _, _} ->
-	    error_logger:error_msg("vm_server: Process data error: ~p~n", [Reason]),
-	    error_logger:info_msg("vm_server: Close connection"),
+	    vm_logger:error("vm_server: Process data error: ~p", [Reason]),
+	    vm_logger:info("vm_server: Close connection"),
 	    {stop, normal, State}
     end;
 handle_info({tcp_closed, _Sock}, State) ->
-    error_logger:info_msg("vm_server: Connection closed by peer"),
+    vm_logger:info("vm_server: Connection closed by peer"),
     {stop, normal, State};
 handle_info(timeout, #state{sock = ListenSock} = State) ->
     {ok, Sock} = gen_tcp:accept(ListenSock),
-    error_logger:info_msg("vm_server: New connection"),
+    vm_logger:info("vm_server: New connection"),
     vm_server_sup:start_child(),
     {noreply, State#state{sock = Sock, conn_state = handle}}.
 
 on_msg_received(Msg, UserData) ->
-    error_logger:info_msg("vm_server: Message received: ~p~n", [Msg]),
+    vm_logger:info("vm_server: Message received: ~p", [Msg]),
     process_request(Msg, UserData).
     %{ok, []}.
 
@@ -88,14 +88,17 @@ process(Data, Callback, UserData) ->
     end.
 
 process_request({error, Reason}, UserData) ->
-    error_logger:error_msg("vm_server: Request error: ~p: close connection", [Reason]),
+    vm_logger:error("vm_server: Request error: ~p: close connection", [Reason]),
     {error, Reason, UserData};
 process_request({error, Reason, _Cmd, _}, _UserData) ->
-    error_logger:error_msg("vm_server: Request error: ~p: send error responce", [Reason]),
-    send_reply().
+    vm_logger:error("vm_server: Request error: ~p: send error responce", [Reason]),
+    {ok, _UserData}.
+%process_request(#vmReq{cmd = Cmd} = _Req, UserData) ->
+%    vm_logger:info("vm_server: request received: ~w", [Cmd]),
+%    {ok, UserData}.
 
-send_reply() ->
-    ok.
+%send_reply() ->
+%    ok.
 
 
 
