@@ -15,6 +15,8 @@
 
 -record(state, {sock, conn_state, buffer}).
 
+-include("vm_msg.hrl").
+
 start() ->
     application:start(vm_server).
 
@@ -92,10 +94,10 @@ process_request({error, Reason}, UserData) ->
     {error, Reason, UserData};
 process_request({error, Reason, _Cmd, _}, _UserData) ->
     vm_logger:error("vm_server: Request error: ~p: send error responce", [Reason]),
-    {ok, _UserData}.
-%process_request(#vmReq{cmd = Cmd} = _Req, UserData) ->
-%    vm_logger:info("vm_server: request received: ~w", [Cmd]),
-%    {ok, UserData}.
+    {ok, _UserData};
+process_request(#vmReq{cmd = Cmd} = _Req, UserData) ->
+    vm_logger:info("vm_server: request received: ~w", [Cmd]),
+    {ok, UserData}.
 
 %send_reply() ->
 %    ok.

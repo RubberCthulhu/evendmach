@@ -5,18 +5,19 @@
 
 -define(MAX_SIZE, 1024).
 
--define(CMD_START, 1).
--define(CMD_BUY, 2).
--define(CMD_ACCEPT, 3).
--define(CMD_CANCEL, 4).
--define(CMD_BALANCE, 5).
--define(CMD_PUT, 8).
+%-define(CMD_START, 1).
+%-define(CMD_BUY, 2).
+%-define(CMD_ACCEPT, 3).
+%-define(CMD_CANCEL, 4).
+%-define(CMD_BALANCE, 5).
+%-define(CMD_PUT, 8).
 
 -define(CLIENT_ID_MAX_SIZE, 50).
 -define(CARD_NUMBER_MAX_SIZE, 40).
 -define(PRODUCT_CODE_MAX_SIZE, 19).
 
--record(vmReq, {cmd, clientId, cardNumber, cardType, tId, product, money}).
+%-record(vmReq, {cmd, clientId, cardNumber, cardType, tId, product, money}).
+-include("vm_msg.hrl").
 
 encode(Key, IVec, Msg) ->
     Data = padding:pad(Msg),
